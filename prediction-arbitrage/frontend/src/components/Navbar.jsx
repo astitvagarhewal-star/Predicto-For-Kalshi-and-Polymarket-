@@ -1,10 +1,20 @@
-import { BarChart3, Bookmark, Calculator, LayoutDashboard, Settings } from "lucide-react";
+import {
+  BarChart3,
+  Bookmark,
+  Calculator,
+  LayoutDashboard,
+  MessageSquare,
+  Settings,
+  Sparkles,
+} from "lucide-react";
 
 const TAB_CONFIG = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "analytics", label: "Analytics", icon: BarChart3 },
+  { key: "community", label: "Community", icon: MessageSquare },
   { key: "watchlist", label: "Watchlist", icon: Bookmark },
   { key: "calculator", label: "Calculator", icon: Calculator },
+  { key: "pro", label: "Pro", icon: Sparkles },
   { key: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -28,7 +38,7 @@ function Navbar({ activeTab, onTabChange, quickSearch, onQuickSearch }) {
           />
         </div>
 
-        <nav className="grid grid-cols-2 gap-2 md:grid-cols-5">
+        <nav className="grid grid-cols-2 gap-2 md:grid-cols-7">
           {TAB_CONFIG.map((tab) => {
             const Icon = tab.icon;
 

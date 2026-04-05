@@ -1,18 +1,31 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
+import AlertSubscriber from "./components/AlertSubscriber";
+import ApiUsagePanel from "./components/ApiUsagePanel";
+import APISettings from "./components/APISettings";
+import AuthPanel from "./components/AuthPanel";
+import BacktestSimulator from "./components/BacktestSimulator";
+import CommunityHub from "./components/CommunityHub";
 import Dashboard from "./components/Dashboard";
 import ErrorBoundary from "./components/ErrorBoundary";
+import ExportShare from "./components/ExportShare";
+import Leaderboard from "./components/Leaderboard";
 import LiveTicker from "./components/LiveTicker";
+import MarketHeatmap from "./components/MarketHeatmap";
 import MarketLinkAnalyzer from "./components/MarketLinkAnalyzer";
 import Navbar from "./components/Navbar";
+import OnboardingWizard from "./components/OnboardingWizard";
 import SmartWatchlist from "./components/SmartWatchlist";
+import SmartNotifications from "./components/SmartNotifications";
 import SourceStatusPanel from "./components/SourceStatusPanel";
 import Stats from "./components/Stats";
+import TradeLogger from "./components/TradeLogger";
 import {
   useFetchOpportunities,
   useFetchOpportunityHistory,
 } from "./hooks/useFetchOpportunities";
 import { useWatchlist } from "./hooks/useWatchlist";
+import { buildApiUrl, fetchJson } from "./utils/api";
 
 const EdgeLandscape3D = lazy(() => import("./components/EdgeLandscape3D"));
 const OpportunityHeatmap = lazy(() => import("./components/OpportunityHeatmap"));
@@ -96,11 +109,18 @@ function buildQueryString(filters) {
 }
 
 function App() {
+  const initialShareId = String(new URLSearchParams(window.location.search).get("share") || "").trim();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [filters, setFilters] = useState(() => parseFiltersFromUrl());
   const [quickSearch, setQuickSearch] = useState(() => parseFiltersFromUrl().search || "");
   const [comparisonIds, setComparisonIds] = useState([]);
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
+  const [shareState, setShareState] = useState({
+    shareId: initialShareId,
+    ids: [],
+    loading: Boolean(initialShareId),
+    error: "",
+  });
 
   const {
     watchlist,
@@ -153,16 +173,58 @@ function App() {
   }, [quickSearch]);
 
   useEffect(() => {
-    const queryString = buildQueryString(filters);
-    const nextPath = queryString
-      ? `${window.location.pathname}?${queryString}`
-      : window.location.pathname;
+    const queryParams = new URLSearchParams(buildQueryString(filters));
+    if (shareState.shareId) {
+      queryParams.set("share", shareState.shareId);
+    }
+
+    const queryString = queryParams.toString();
+    const nextPath = queryString ? `${window.location.pathname}?${queryString}` : window.location.pathname;
     const currentPath = `${window.location.pathname}${window.location.search}`;
 
     if (nextPath !== currentPath) {
       window.history.replaceState(null, "", nextPath);
     }
-  }, [filters]);
+  }, [filters, shareState.shareId]);
+
+  useEffect(() => {
+    const shareId = initialShareId;
+    if (!shareId) {
+      return;
+    }
+
+    let active = true;
+
+    fetchJson(buildApiUrl(`/api/share/${shareId}`))
+      .then((payload) => {
+        if (!active) {
+          return;
+        }
+
+        setShareState({
+          shareId,
+          ids: Array.isArray(payload.marketIds) ? payload.marketIds : [],
+          loading: false,
+          error: "",
+        });
+      })
+      .catch((error) => {
+        if (!active) {
+          return;
+        }
+
+        setShareState({
+          shareId,
+          ids: [],
+          loading: false,
+          error: error.message || "Could not load shared set",
+        });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [initialShareId]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -242,9 +304,24 @@ function App() {
     });
   }, []);
 
-  const renderDashboard = useMemo(
-    () => (
-      <section className="space-y-4">
+  const applySharedToComparison = useCallback(() => {
+    if (shareState.ids.length === 0 || opportunities.length === 0) {
+      return;
+    }
+
+    const next = opportunities
+      .filter((item) => shareState.ids.includes(String(item.id)))
+      .slice(0, 4)
+      .map((item) => `${item.market}:${item.id}`);
+
+    if (next.length > 0) {
+      setComparisonIds(next);
+      setActiveTab("dashboard");
+    }
+  }, [opportunities, shareState.ids]);
+
+  const renderDashboard = (
+    <section className="space-y-4">
         <MarketLinkAnalyzer
           onAddWatchlist={toggleWatchlist}
           onViewMarket={(name) => {
@@ -256,6 +333,33 @@ function App() {
         />
 
         <LiveTicker opportunities={opportunities} trendByKey={trendByKey} />
+
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-700 bg-pa-card px-4 py-3">
+          <p className="text-xs text-pa-muted">Export top markets or share a live snapshot with one click.</p>
+          <ExportShare opportunities={opportunities} />
+        </div>
+
+        {shareState.shareId ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-pa-blue/30 bg-pa-blue/10 px-4 py-3">
+            <div className="text-xs">
+              {shareState.loading ? (
+                <p className="text-pa-muted">Loading shared snapshot...</p>
+              ) : shareState.error ? (
+                <p className="text-pa-red">{shareState.error}</p>
+              ) : (
+                <p className="text-pa-text">Loaded shared snapshot with {shareState.ids.length} market IDs.</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={applySharedToComparison}
+              disabled={shareState.loading || shareState.ids.length === 0}
+              className="rounded-lg border border-pa-blue bg-pa-blue px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Compare Shared Markets
+            </button>
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
           <div className="space-y-4 xl:col-span-3">
@@ -288,27 +392,6 @@ function App() {
           </aside>
         </div>
       </section>
-    ),
-    [
-      castSentimentVote,
-      comparisonIds,
-      filters,
-      handleFiltersChange,
-      handleManualRefresh,
-      handleResetFilters,
-      handleSelectOpportunity,
-      handleToggleComparison,
-      historyLoading,
-      historySeries,
-      localVotes,
-      opportunities,
-      opportunitiesFetching,
-      opportunitiesLoading,
-      sourceStatus,
-      toggleWatchlist,
-      trendByKey,
-      watchlistIds,
-    ]
   );
 
   return (
@@ -354,9 +437,22 @@ function App() {
           {activeTab === "dashboard" ? renderDashboard : null}
 
           {activeTab === "analytics" ? (
-            <Suspense fallback={<div className="h-80 animate-pulse rounded-xl border border-slate-700 bg-slate-800" />}>
-              <AnalyticsTab opportunities={opportunities} historySeries={historySeries} />
-            </Suspense>
+            <section className="space-y-4">
+              <Suspense fallback={<div className="h-80 animate-pulse rounded-xl border border-slate-700 bg-slate-800" />}>
+                <AnalyticsTab opportunities={opportunities} historySeries={historySeries} />
+              </Suspense>
+
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <BacktestSimulator />
+                <MarketHeatmap />
+              </div>
+
+              <Leaderboard />
+            </section>
+          ) : null}
+
+          {activeTab === "community" ? (
+            <CommunityHub opportunities={opportunities} />
           ) : null}
 
           {activeTab === "watchlist" ? (
@@ -376,11 +472,26 @@ function App() {
           ) : null}
 
           {activeTab === "settings" ? (
-            <section className="rounded-2xl border border-slate-700 bg-pa-card p-5">
-              <p className="text-lg font-semibold text-pa-text">Settings</p>
-              <p className="mt-2 text-sm text-pa-muted">
-                MVP mode is active: no account required. Preferences persist in local storage.
-              </p>
+            <section className="space-y-4">
+              <section className="rounded-2xl border border-slate-700 bg-pa-card p-5">
+                <p className="text-lg font-semibold text-pa-text">Settings</p>
+                <p className="mt-2 text-sm text-pa-muted">
+                  MVP mode is active: no account required. Preferences persist in local storage.
+                </p>
+              </section>
+              <OnboardingWizard />
+              <AuthPanel />
+              <AlertSubscriber />
+              <SmartNotifications />
+            </section>
+          ) : null}
+
+          {activeTab === "pro" ? (
+            <section className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+              <APISettings />
+              <ApiUsagePanel />
+              <BacktestSimulator />
+              <TradeLogger opportunities={opportunities} />
             </section>
           ) : null}
         </ErrorBoundary>

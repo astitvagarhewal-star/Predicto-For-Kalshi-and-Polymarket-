@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { useLocalStorage } from "./useLocalStorage";
+import { buildApiUrl } from "../utils/api";
 
 const DEFAULT_STATE = {
   items: [],
@@ -20,15 +21,43 @@ export function useWatchlist() {
         return;
       }
 
+      const email = localStorage.getItem("pa-user-email");
+      const syncEnabled = Boolean(email && /@/.test(email));
+
       setState((current) => {
         const key = `${opportunity.market}:${opportunity.id}`;
         const exists = current.items.some((item) => `${item.market}:${item.id}` === key);
 
         if (exists) {
+          if (syncEnabled) {
+            fetch(buildApiUrl(`/api/watchlist/${encodeURIComponent(opportunity.id)}`), {
+              method: "DELETE",
+              headers: {
+                email,
+              },
+            }).catch(() => {});
+          }
+
           return {
             ...current,
             items: current.items.filter((item) => `${item.market}:${item.id}` !== key),
           };
+        }
+
+        if (syncEnabled) {
+          fetch(buildApiUrl("/api/watchlist/add"), {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              email,
+              marketId: opportunity.id,
+              marketName: opportunity.name,
+              platform: opportunity.market,
+              currentPrice: (Number(opportunity.bestBid || 0) + Number(opportunity.bestAsk || 0)) / 2,
+            }),
+          }).catch(() => {});
         }
 
         return {
