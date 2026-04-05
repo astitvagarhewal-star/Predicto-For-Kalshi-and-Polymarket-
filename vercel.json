@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "framework": "vite",
+  "installCommand": "cd prediction-arbitrage/frontend && npm ci",
+  "buildCommand": "cd prediction-arbitrage/frontend && npm run build",
+  "outputDirectory": "prediction-arbitrage/frontend/dist"
+}
