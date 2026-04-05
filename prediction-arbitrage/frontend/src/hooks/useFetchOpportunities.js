@@ -1,6 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const ENV_API_URL = String(import.meta.env.VITE_API_URL || "").trim().replace(/\/+$/, "");
+const IS_LOCALHOST_URL = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(ENV_API_URL);
+const API_URL = import.meta.env.PROD
+  ? ENV_API_URL && !IS_LOCALHOST_URL
+    ? ENV_API_URL
+    : ""
+  : ENV_API_URL || "http://localhost:5000";
 
 function toQueryString(filters) {
   const params = new URLSearchParams();
